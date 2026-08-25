@@ -22,10 +22,23 @@ const gameState = {
     missions: [],
     currentMission: null,
     keys: {},
-    mousePos: { x: 0, y: 0 }
+    mousePos: { x: 0, y: 0 },
+    touch: {
+        movement: { x: 0, y: 0 },
+        active: false,
+        aiming: { x: 0, y: 0 },
+        aimingActive: false
+    }
 };
 
-// Input Handling
+// Touch Controls Setup
+const touchControls = {
+    leftJoystick: { x: 100, y: canvas.height - 100, radius: 60 },
+    rightJoystick: { x: canvas.width - 100, y: canvas.height - 100, radius: 60 },
+    shootButton: { x: canvas.width - 80, y: 80, radius: 40 }
+};
+
+// Input Handling - Keyboard
 window.addEventListener('keydown', (e) => {
     gameState.keys[e.key.toLowerCase()] = true;
     
@@ -38,6 +51,7 @@ window.addEventListener('keyup', (e) => {
     gameState.keys[e.key.toLowerCase()] = false;
 });
 
+// Input Handling - Mouse
 window.addEventListener('mousemove', (e) => {
     const rect = canvas.getBoundingClientRect();
     gameState.mousePos.x = e.clientX - rect.left;
@@ -46,35 +60,138 @@ window.addEventListener('mousemove', (e) => {
 
 window.addEventListener('click', shoot);
 
-// Player Movement
+// Touch Controls - Joysticks and Buttons
+canvas.addEventListener('touchstart', handleTouchStart, false);
+canvas.addEventListener('touchmove', handleTouchMove, false);
+canvas.addEventListener('touchend', handleTouchEnd, false);
+
+function handleTouchStart(e) {
+    e.preventDefault();
+    const touches = e.touches;
+    
+    for (let touch of touches) {
+        const rect = canvas.getBoundingClientRect();
+        const x = touch.clientX - rect.left;
+        const y = touch.clientY - rect.top;
+        
+        // Left joystick (movement)
+        const distLeft = Math.sqrt(
+            Math.pow(x - touchControls.leftJoystick.x, 2) + 
+            Math.pow(y - touchControls.leftJoystick.y, 2)
+        );
+        
+        if (distLeft < touchControls.leftJoystick.radius * 2) {
+            gameState.touch.movement = { x, y };
+            gameState.touch.active = true;
+        }
+        
+        // Right joystick (aiming)
+        const distRight = Math.sqrt(
+            Math.pow(x - touchControls.rightJoystick.x, 2) + 
+            Math.pow(y - touchControls.rightJoystick.y, 2)
+        );
+        
+        if (distRight < touchControls.rightJoystick.radius * 2) {
+            gameState.touch.aiming = { x, y };
+            gameState.touch.aimingActive = true;
+        }
+        
+        // Shoot button
+        const distShoot = Math.sqrt(
+            Math.pow(x - touchControls.shootButton.x, 2) + 
+            Math.pow(y - touchControls.shootButton.y, 2)
+        );
+        
+        if (distShoot < touchControls.shootButton.radius) {
+            shoot();
+        }
+    }
+}
+
+function handleTouchMove(e) {
+    e.preventDefault();
+    const touches = e.touches;
+    
+    for (let touch of touches) {
+        const rect = canvas.getBoundingClientRect();
+        const x = touch.clientX - rect.left;
+        const y = touch.clientY - rect.top;
+        
+        // Update left joystick
+        const distLeft = Math.sqrt(
+            Math.pow(x - touchControls.leftJoystick.x, 2) + 
+            Math.pow(y - touchControls.leftJoystick.y, 2)
+        );
+        
+        if (distLeft < touchControls.leftJoystick.radius * 2.5) {
+            gameState.touch.movement = { x, y };
+        }
+        
+        // Update right joystick
+        const distRight = Math.sqrt(
+            Math.pow(x - touchControls.rightJoystick.x, 2) + 
+            Math.pow(y - touchControls.rightJoystick.y, 2)
+        );
+        
+        if (distRight < touchControls.rightJoystick.radius * 2.5) {
+            gameState.touch.aiming = { x, y };
+        }
+    }
+}
+
+function handleTouchEnd(e) {
+    e.preventDefault();
+    gameState.touch.active = false;
+    gameState.touch.aimingActive = false;
+}
+
+// Player Movement - Touch and Keyboard
 function updatePlayer() {
     const keys = gameState.keys;
-    let moved = false;
     
+    // Keyboard movement
     if (keys['w'] || keys['arrowup']) {
         gameState.player.y -= gameState.player.speed;
-        moved = true;
     }
     if (keys['s'] || keys['arrowdown']) {
         gameState.player.y += gameState.player.speed;
-        moved = true;
     }
     if (keys['a'] || keys['arrowleft']) {
         gameState.player.x -= gameState.player.speed;
-        moved = true;
     }
     if (keys['d'] || keys['arrowright']) {
         gameState.player.x += gameState.player.speed;
-        moved = true;
+    }
+    
+    // Touch joystick movement
+    if (gameState.touch.active) {
+        const dx = gameState.touch.movement.x - touchControls.leftJoystick.x;
+        const dy = gameState.touch.movement.y - touchControls.leftJoystick.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const maxDistance = touchControls.leftJoystick.radius;
+        
+        if (distance > 10) {
+            const angle = Math.atan2(dy, dx);
+            gameState.player.x += Math.cos(angle) * gameState.player.speed;
+            gameState.player.y += Math.sin(angle) * gameState.player.speed;
+        }
     }
     
     // Boundary checking
     gameState.player.x = Math.max(0, Math.min(canvas.width - gameState.player.width, gameState.player.x));
     gameState.player.y = Math.max(0, Math.min(canvas.height - gameState.player.height, gameState.player.y));
     
-    // Calculate angle to mouse
-    const dx = gameState.mousePos.x - gameState.player.x;
-    const dy = gameState.mousePos.y - gameState.player.y;
+    // Calculate angle to mouse or touch aiming
+    let targetX = gameState.mousePos.x;
+    let targetY = gameState.mousePos.y;
+    
+    if (gameState.touch.aimingActive) {
+        targetX = gameState.touch.aiming.x;
+        targetY = gameState.touch.aiming.y;
+    }
+    
+    const dx = targetX - gameState.player.x;
+    const dy = targetY - gameState.player.y;
     gameState.player.angle = Math.atan2(dy, dx);
 }
 
@@ -457,6 +574,103 @@ function drawMissionInfo() {
     ctx.fillText(`Reward: $${mission.reward}`, x + 10, y + 85);
 }
 
+// Draw Touch Controls
+function drawTouchControls() {
+    // Left Joystick (Movement)
+    ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+    ctx.beginPath();
+    ctx.arc(touchControls.leftJoystick.x, touchControls.leftJoystick.y, touchControls.leftJoystick.radius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.strokeStyle = '#00ff00';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Joystick stick
+    if (gameState.touch.active) {
+        const dx = gameState.touch.movement.x - touchControls.leftJoystick.x;
+        const dy = gameState.touch.movement.y - touchControls.leftJoystick.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const maxDistance = touchControls.leftJoystick.radius * 0.6;
+        
+        const actualDistance = Math.min(distance, maxDistance);
+        const angle = Math.atan2(dy, dx);
+        
+        const stickX = touchControls.leftJoystick.x + Math.cos(angle) * actualDistance;
+        const stickY = touchControls.leftJoystick.y + Math.sin(angle) * actualDistance;
+        
+        ctx.fillStyle = '#00ff00';
+        ctx.beginPath();
+        ctx.arc(stickX, stickY, 20, 0, Math.PI * 2);
+        ctx.fill();
+    } else {
+        ctx.fillStyle = '#00ff00';
+        ctx.beginPath();
+        ctx.arc(touchControls.leftJoystick.x, touchControls.leftJoystick.y, 20, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('MOVE', touchControls.leftJoystick.x, touchControls.leftJoystick.y + touchControls.leftJoystick.radius + 20);
+    
+    // Right Joystick (Aiming)
+    ctx.fillStyle = 'rgba(255, 255, 0, 0.2)';
+    ctx.beginPath();
+    ctx.arc(touchControls.rightJoystick.x, touchControls.rightJoystick.y, touchControls.rightJoystick.radius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.strokeStyle = '#ffff00';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Joystick stick
+    if (gameState.touch.aimingActive) {
+        const dx = gameState.touch.aiming.x - touchControls.rightJoystick.x;
+        const dy = gameState.touch.aiming.y - touchControls.rightJoystick.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const maxDistance = touchControls.rightJoystick.radius * 0.6;
+        
+        const actualDistance = Math.min(distance, maxDistance);
+        const angle = Math.atan2(dy, dx);
+        
+        const stickX = touchControls.rightJoystick.x + Math.cos(angle) * actualDistance;
+        const stickY = touchControls.rightJoystick.y + Math.sin(angle) * actualDistance;
+        
+        ctx.fillStyle = '#ffff00';
+        ctx.beginPath();
+        ctx.arc(stickX, stickY, 20, 0, Math.PI * 2);
+        ctx.fill();
+    } else {
+        ctx.fillStyle = '#ffff00';
+        ctx.beginPath();
+        ctx.arc(touchControls.rightJoystick.x, touchControls.rightJoystick.y, 20, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('AIM', touchControls.rightJoystick.x, touchControls.rightJoystick.y + touchControls.rightJoystick.radius + 20);
+    
+    // Shoot Button
+    ctx.fillStyle = '#ff0000';
+    ctx.beginPath();
+    ctx.arc(touchControls.shootButton.x, touchControls.shootButton.y, touchControls.shootButton.radius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 20px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('SHOOT', touchControls.shootButton.x, touchControls.shootButton.y);
+}
+
 function updateHUD() {
     document.getElementById('health').textContent = Math.ceil(gameState.player.health);
     document.getElementById('money').textContent = gameState.player.money;
@@ -504,6 +718,7 @@ function gameLoop() {
     drawPlayer();
     drawPlayerHealthBar();
     drawMissionInfo();
+    drawTouchControls();
     
     updateHUD();
     requestAnimationFrame(gameLoop);
