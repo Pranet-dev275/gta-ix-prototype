@@ -3,8 +3,71 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GTA IX - Prototype</title>
-    <link rel="stylesheet" href="style.css">
+    <title>GTA IX - Prototype Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            display: flex;
+            gap: 20px;
+            padding: 20px;
+            background: #000;
+            height: 100vh;
+        }
+
+        #gameCanvas {
+            border: 3px solid #00ff00;
+            background: linear-gradient(135deg, #1a3a52 0%, #0d1f2d 100%);
+            cursor: crosshair;
+            flex: 1;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+            touch-action: none;
+        }
+
+        #hud {
+            width: 250px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+        }
+
+        .hud-section {
+            background: rgba(0, 255, 0, 0.1);
+            border: 2px solid #00ff00;
+            padding: 15px;
+            border-radius: 5px;
+        }
+
+        .hud-section h3 {
+            color: #00ff00;
+            margin-bottom: 10px;
+            font-size: 14px;
+            text-transform: uppercase;
+        }
+
+        .hud-section p {
+            font-size: 12px;
+            margin: 5px 0;
+            color: #ccc;
+        }
+
+        #missionText {
+            color: #ffff00;
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
     <div id="gameContainer">
@@ -22,13 +85,506 @@
             </div>
             <div class="hud-section">
                 <h3>Controls</h3>
-                <p>WASD/Arrows: Move</p>
-                <p>Space: Shoot</p>
-                <p>E: Interact</p>
-                <p>M: Mission Menu</p>
+                <p><strong>Keyboard:</strong></p>
+                <p>WASD: Move | M: Menu</p>
+                <p><strong>Mouse:</strong></p>
+                <p>Aim & Click: Shoot</p>
+                <p><strong>Touch:</strong></p>
+                <p>Left Joy: Move</p>
+                <p>Right Joy: Aim</p>
+                <p>Red Btn: Shoot</p>
             </div>
         </div>
     </div>
-    <script src="game.js"></script>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const gameState = {
+            player: {
+                x: 500, y: 350, width: 20, height: 20, speed: 5,
+                health: 100, maxHealth: 100, money: 0, level: 1, angle: 0
+            },
+            enemies: [], npcs: [], bullets: [], missions: [],
+            currentMission: null, keys: {}, mousePos: { x: 0, y: 0 },
+            touch: { movement: { x: 0, y: 0 }, active: false, aiming: { x: 0, y: 0 }, aimingActive: false }
+        };
+
+        const touchControls = {
+            leftJoystick: { x: 100, y: canvas.height - 100, radius: 60 },
+            rightJoystick: { x: canvas.width - 100, y: canvas.height - 100, radius: 60 },
+            shootButton: { x: canvas.width - 80, y: 80, radius: 40 }
+        };
+
+        window.addEventListener('keydown', (e) => {
+            gameState.keys[e.key.toLowerCase()] = true;
+            if (e.key === 'm' || e.key === 'M') showMissionMenu();
+        });
+
+        window.addEventListener('keyup', (e) => {
+            gameState.keys[e.key.toLowerCase()] = false;
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            gameState.mousePos.x = e.clientX - rect.left;
+            gameState.mousePos.y = e.clientY - rect.top;
+        });
+
+        window.addEventListener('click', shoot);
+        canvas.addEventListener('touchstart', handleTouchStart, false);
+        canvas.addEventListener('touchmove', handleTouchMove, false);
+        canvas.addEventListener('touchend', handleTouchEnd, false);
+
+        function handleTouchStart(e) {
+            e.preventDefault();
+            for (let touch of e.touches) {
+                const rect = canvas.getBoundingClientRect();
+                const x = touch.clientX - rect.left;
+                const y = touch.clientY - rect.top;
+                
+                const distLeft = Math.sqrt(Math.pow(x - touchControls.leftJoystick.x, 2) + Math.pow(y - touchControls.leftJoystick.y, 2));
+                if (distLeft < touchControls.leftJoystick.radius * 2) {
+                    gameState.touch.movement = { x, y };
+                    gameState.touch.active = true;
+                }
+                
+                const distRight = Math.sqrt(Math.pow(x - touchControls.rightJoystick.x, 2) + Math.pow(y - touchControls.rightJoystick.y, 2));
+                if (distRight < touchControls.rightJoystick.radius * 2) {
+                    gameState.touch.aiming = { x, y };
+                    gameState.touch.aimingActive = true;
+                }
+                
+                const distShoot = Math.sqrt(Math.pow(x - touchControls.shootButton.x, 2) + Math.pow(y - touchControls.shootButton.y, 2));
+                if (distShoot < touchControls.shootButton.radius) shoot();
+            }
+        }
+
+        function handleTouchMove(e) {
+            e.preventDefault();
+            for (let touch of e.touches) {
+                const rect = canvas.getBoundingClientRect();
+                const x = touch.clientX - rect.left;
+                const y = touch.clientY - rect.top;
+                
+                const distLeft = Math.sqrt(Math.pow(x - touchControls.leftJoystick.x, 2) + Math.pow(y - touchControls.leftJoystick.y, 2));
+                if (distLeft < touchControls.leftJoystick.radius * 2.5) gameState.touch.movement = { x, y };
+                
+                const distRight = Math.sqrt(Math.pow(x - touchControls.rightJoystick.x, 2) + Math.pow(y - touchControls.rightJoystick.y, 2));
+                if (distRight < touchControls.rightJoystick.radius * 2.5) gameState.touch.aiming = { x, y };
+            }
+        }
+
+        function handleTouchEnd(e) {
+            e.preventDefault();
+            gameState.touch.active = false;
+            gameState.touch.aimingActive = false;
+        }
+
+        function updatePlayer() {
+            const keys = gameState.keys;
+            if (keys['w'] || keys['arrowup']) gameState.player.y -= gameState.player.speed;
+            if (keys['s'] || keys['arrowdown']) gameState.player.y += gameState.player.speed;
+            if (keys['a'] || keys['arrowleft']) gameState.player.x -= gameState.player.speed;
+            if (keys['d'] || keys['arrowright']) gameState.player.x += gameState.player.speed;
+            
+            if (gameState.touch.active) {
+                const dx = gameState.touch.movement.x - touchControls.leftJoystick.x;
+                const dy = gameState.touch.movement.y - touchControls.leftJoystick.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > 10) {
+                    const angle = Math.atan2(dy, dx);
+                    gameState.player.x += Math.cos(angle) * gameState.player.speed;
+                    gameState.player.y += Math.sin(angle) * gameState.player.speed;
+                }
+            }
+            
+            gameState.player.x = Math.max(0, Math.min(canvas.width - gameState.player.width, gameState.player.x));
+            gameState.player.y = Math.max(0, Math.min(canvas.height - gameState.player.height, gameState.player.y));
+            
+            let targetX = gameState.mousePos.x, targetY = gameState.mousePos.y;
+            if (gameState.touch.aimingActive) {
+                targetX = gameState.touch.aiming.x;
+                targetY = gameState.touch.aiming.y;
+            }
+            
+            const dx = targetX - gameState.player.x;
+            const dy = targetY - gameState.player.y;
+            gameState.player.angle = Math.atan2(dy, dx);
+        }
+
+        function shoot() {
+            gameState.bullets.push({
+                x: gameState.player.x, y: gameState.player.y,
+                vx: Math.cos(gameState.player.angle) * 7,
+                vy: Math.sin(gameState.player.angle) * 7,
+                radius: 4, damage: 10
+            });
+        }
+
+        function updateBullets() {
+            gameState.bullets = gameState.bullets.filter(bullet => {
+                bullet.x += bullet.vx;
+                bullet.y += bullet.vy;
+                return bullet.x > 0 && bullet.x < canvas.width && bullet.y > 0 && bullet.y < canvas.height;
+            });
+        }
+
+        function createNPCs() {
+            gameState.npcs = [
+                { x: 150, y: 150, name: 'Tony', mission: 0, color: '#ff0000', radius: 15 },
+                { x: 800, y: 600, name: 'Lucia', mission: 1, color: '#0000ff', radius: 15 },
+                { x: 500, y: 100, name: 'Marco', mission: 2, color: '#ffff00', radius: 15 }
+            ];
+        }
+
+        function createMissions() {
+            gameState.missions = [
+                { id: 0, name: 'Eliminate Threats', description: 'Defeat 5 enemies', reward: 500, completed: false, enemiesKilled: 0, targetEnemies: 5 },
+                { id: 1, name: 'Defend Base', description: 'Survive 30 seconds', reward: 750, completed: false, timeLimit: 30000, startTime: null },
+                { id: 2, name: 'Steal Money Bag', description: 'Get bag & return', reward: 1000, completed: false, targetX: 800, targetY: 100, collected: false }
+            ];
+        }
+
+        function startMission(id) {
+            gameState.currentMission = gameState.missions[id];
+            if (id === 1) {
+                gameState.currentMission.startTime = Date.now();
+                spawnWaveEnemies(5);
+            } else if (id === 0) spawnEnemies(5);
+            updateHUD();
+        }
+
+        function showMissionMenu() {
+            let menu = 'AVAILABLE MISSIONS:\n\n';
+            gameState.missions.forEach(m => menu += `${m.id + 1}. ${m.name} - $${m.reward} [${m.completed ? '✓' : 'AVAILABLE'}]\n`);
+            const choice = prompt(menu + '\nEnter number (1-3):');
+            if (choice && choice >= 1 && choice <= 3) startMission(parseInt(choice) - 1);
+        }
+
+        function spawnEnemies(count) {
+            for (let i = 0; i < count; i++) {
+                const angle = (Math.PI * 2 * i) / count;
+                const dist = 200;
+                gameState.enemies.push({
+                    x: gameState.player.x + Math.cos(angle) * dist,
+                    y: gameState.player.y + Math.sin(angle) * dist,
+                    vx: 0, vy: 0, speed: 2, radius: 12, health: 30, maxHealth: 30, angle: 0, color: '#ff5555'
+                });
+            }
+        }
+
+        function spawnWaveEnemies(count) {
+            const positions = [{ x: 50, y: 350 }, { x: canvas.width - 50, y: 350 }, { x: 500, y: 50 }, { x: 500, y: canvas.height - 50 }, { x: 100, y: 100 }];
+            for (let i = 0; i < count; i++) {
+                const pos = positions[i % positions.length];
+                gameState.enemies.push({
+                    x: pos.x, y: pos.y, vx: 0, vy: 0, speed: 1.5, radius: 12, health: 25, maxHealth: 25, angle: 0, color: '#ff3333'
+                });
+            }
+        }
+
+        function updateEnemies() {
+            gameState.enemies.forEach(enemy => {
+                const dx = gameState.player.x - enemy.x;
+                const dy = gameState.player.y - enemy.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance > 0) {
+                    enemy.vx = (dx / distance) * enemy.speed;
+                    enemy.vy = (dy / distance) * enemy.speed;
+                }
+                enemy.x += enemy.vx;
+                enemy.y += enemy.vy;
+                enemy.angle = Math.atan2(dy, dx);
+            });
+            
+            gameState.enemies.forEach(enemy => {
+                const dx = gameState.player.x - enemy.x;
+                const dy = gameState.player.y - enemy.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance < gameState.player.width / 2 + enemy.radius) gameState.player.health -= 0.5;
+            });
+        }
+
+        function updateBulletEnemyCollisions() {
+            gameState.bullets.forEach((bullet, bIdx) => {
+                gameState.enemies.forEach((enemy, eIdx) => {
+                    const dx = bullet.x - enemy.x;
+                    const dy = bullet.y - enemy.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < bullet.radius + enemy.radius) {
+                        enemy.health -= bullet.damage;
+                        gameState.bullets.splice(bIdx, 1);
+                        if (enemy.health <= 0) {
+                            gameState.enemies.splice(eIdx, 1);
+                            gameState.player.money += 50;
+                            gameState.player.level = Math.floor(gameState.player.money / 500) + 1;
+                            if (gameState.currentMission && gameState.currentMission.id === 0) gameState.currentMission.enemiesKilled++;
+                        }
+                    }
+                });
+            });
+        }
+
+        function checkMissionCompletion() {
+            if (!gameState.currentMission) return;
+            const mission = gameState.currentMission;
+            
+            if (mission.id === 0 && mission.enemiesKilled >= mission.targetEnemies) completeMission();
+            else if (mission.id === 1 && (Date.now() - mission.startTime) / 1000 >= mission.timeLimit / 1000) completeMission();
+            else if (mission.id === 2) {
+                const dx = gameState.player.x - mission.targetX;
+                const dy = gameState.player.y - mission.targetY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance < 30 && !mission.collected) mission.collected = true;
+                if (mission.collected && gameState.player.x < 100 && gameState.player.y < 100) completeMission();
+            }
+        }
+
+        function completeMission() {
+            gameState.player.money += gameState.currentMission.reward;
+            gameState.currentMission.completed = true;
+            alert(`Mission Complete! Earned $${gameState.currentMission.reward}`);
+            gameState.currentMission = null;
+            gameState.enemies = [];
+            updateHUD();
+        }
+
+        function drawPlayer() {
+            ctx.save();
+            ctx.translate(gameState.player.x, gameState.player.y);
+            ctx.rotate(gameState.player.angle);
+            ctx.fillStyle = '#00ff00';
+            ctx.fillRect(-gameState.player.width / 2, -gameState.player.height / 2, gameState.player.width, gameState.player.height);
+            ctx.strokeStyle = '#ffff00';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(gameState.player.width / 2, 0);
+            ctx.lineTo(gameState.player.width / 2 + 15, 0);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function drawEnemies() {
+            gameState.enemies.forEach(enemy => {
+                ctx.fillStyle = enemy.color;
+                ctx.beginPath();
+                ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
+                ctx.fill();
+                const healthPercent = enemy.health / enemy.maxHealth;
+                ctx.fillStyle = '#00ff00';
+                ctx.fillRect(enemy.x - enemy.radius, enemy.y - enemy.radius - 8, enemy.radius * 2 * healthPercent, 4);
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(enemy.x - enemy.radius, enemy.y - enemy.radius - 8, enemy.radius * 2, 4);
+            });
+        }
+
+        function drawBullets() {
+            ctx.fillStyle = '#ffff00';
+            gameState.bullets.forEach(bullet => {
+                ctx.beginPath();
+                ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        function drawNPCs() {
+            gameState.npcs.forEach(npc => {
+                ctx.fillStyle = npc.color;
+                ctx.beginPath();
+                ctx.arc(npc.x, npc.y, npc.radius, 0, Math.PI * 2);
+                ctx.fill();
+                if (!gameState.missions[npc.mission].completed) {
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(npc.name, npc.x, npc.y + npc.radius + 15);
+            });
+        }
+
+        function drawMissionTarget() {
+            if (!gameState.currentMission || gameState.currentMission.id !== 2) return;
+            const m = gameState.currentMission;
+            ctx.strokeStyle = '#ffff00';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(m.targetX, m.targetY, 20, 0, Math.PI * 2);
+            ctx.stroke();
+            if (m.collected) {
+                ctx.fillStyle = 'rgba(255, 255, 0, 0.3)';
+                ctx.fill();
+            }
+        }
+
+        function drawPlayerHealthBar() {
+            const x = 20, y = 20, w = 200, h = 20;
+            ctx.fillStyle = '#333';
+            ctx.fillRect(x, y, w, h);
+            const hp = gameState.player.health / gameState.player.maxHealth;
+            ctx.fillStyle = hp > 0.5 ? '#00ff00' : hp > 0.25 ? '#ffff00' : '#ff0000';
+            ctx.fillRect(x, y, w * hp, h);
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x, y, w, h);
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(`Health: ${Math.ceil(gameState.player.health)}/${gameState.player.maxHealth}`, x + w / 2, y + 15);
+        }
+
+        function drawMissionInfo() {
+            if (!gameState.currentMission) return;
+            const m = gameState.currentMission;
+            const x = canvas.width - 300, y = 20;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(x, y, 280, 120);
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x, y, 280, 120);
+            ctx.fillStyle = '#ffff00';
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(m.name, x + 10, y + 25);
+            ctx.fillStyle = '#00ff00';
+            ctx.font = '12px Arial';
+            ctx.fillText(m.description, x + 10, y + 45);
+            if (m.id === 0) ctx.fillText(`Killed: ${m.enemiesKilled}/${m.targetEnemies}`, x + 10, y + 65);
+            else if (m.id === 1) ctx.fillText(`Time: ${Math.floor((Date.now() - m.startTime) / 1000)}/${m.timeLimit / 1000}s`, x + 10, y + 65);
+            else ctx.fillText(`Collected: ${m.collected ? 'Yes' : 'No'}`, x + 10, y + 65);
+            ctx.fillText(`Reward: $${m.reward}`, x + 10, y + 85);
+        }
+
+        function drawTouchControls() {
+            // Left Joystick
+            ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+            ctx.beginPath();
+            ctx.arc(touchControls.leftJoystick.x, touchControls.leftJoystick.y, touchControls.leftJoystick.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            if (gameState.touch.active) {
+                const dx = gameState.touch.movement.x - touchControls.leftJoystick.x;
+                const dy = gameState.touch.movement.y - touchControls.leftJoystick.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const maxDist = touchControls.leftJoystick.radius * 0.6;
+                const actualDist = Math.min(dist, maxDist);
+                const angle = Math.atan2(dy, dx);
+                ctx.fillStyle = '#00ff00';
+                ctx.beginPath();
+                ctx.arc(touchControls.leftJoystick.x + Math.cos(angle) * actualDist, touchControls.leftJoystick.y + Math.sin(angle) * actualDist, 20, 0, Math.PI * 2);
+                ctx.fill();
+            } else {
+                ctx.fillStyle = '#00ff00';
+                ctx.beginPath();
+                ctx.arc(touchControls.leftJoystick.x, touchControls.leftJoystick.y, 20, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('MOVE', touchControls.leftJoystick.x, touchControls.leftJoystick.y + touchControls.leftJoystick.radius + 20);
+            
+            // Right Joystick
+            ctx.fillStyle = 'rgba(255, 255, 0, 0.2)';
+            ctx.beginPath();
+            ctx.arc(touchControls.rightJoystick.x, touchControls.rightJoystick.y, touchControls.rightJoystick.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#ffff00';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            if (gameState.touch.aimingActive) {
+                const dx = gameState.touch.aiming.x - touchControls.rightJoystick.x;
+                const dy = gameState.touch.aiming.y - touchControls.rightJoystick.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const maxDist = touchControls.rightJoystick.radius * 0.6;
+                const actualDist = Math.min(dist, maxDist);
+                const angle = Math.atan2(dy, dx);
+                ctx.fillStyle = '#ffff00';
+                ctx.beginPath();
+                ctx.arc(touchControls.rightJoystick.x + Math.cos(angle) * actualDist, touchControls.rightJoystick.y + Math.sin(angle) * actualDist, 20, 0, Math.PI * 2);
+                ctx.fill();
+            } else {
+                ctx.fillStyle = '#ffff00';
+                ctx.beginPath();
+                ctx.arc(touchControls.rightJoystick.x, touchControls.rightJoystick.y, 20, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('AIM', touchControls.rightJoystick.x, touchControls.rightJoystick.y + touchControls.rightJoystick.radius + 20);
+            
+            // Shoot Button
+            ctx.fillStyle = '#ff0000';
+            ctx.beginPath();
+            ctx.arc(touchControls.shootButton.x, touchControls.shootButton.y, touchControls.shootButton.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 20px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('SHOOT', touchControls.shootButton.x, touchControls.shootButton.y);
+        }
+
+        function updateHUD() {
+            document.getElementById('health').textContent = Math.ceil(gameState.player.health);
+            document.getElementById('money').textContent = gameState.player.money;
+            document.getElementById('level').textContent = gameState.player.level;
+            document.getElementById('missionText').textContent = gameState.currentMission ? `Mission: ${gameState.currentMission.name}` : 'No active mission (Press M)';
+        }
+
+        function gameLoop() {
+            ctx.fillStyle = 'rgba(26, 58, 82, 0.3)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            updatePlayer();
+            updateEnemies();
+            updateBullets();
+            updateBulletEnemyCollisions();
+            checkMissionCompletion();
+            
+            if (gameState.player.health <= 0) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#ff0000';
+                ctx.font = 'bold 60px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '20px Arial';
+                ctx.fillText('Reload page to restart', canvas.width / 2, canvas.height / 2 + 50);
+                return;
+            }
+            
+            drawMissionTarget();
+            drawEnemies();
+            drawBullets();
+            drawNPCs();
+            drawPlayer();
+            drawPlayerHealthBar();
+            drawMissionInfo();
+            drawTouchControls();
+            updateHUD();
+            requestAnimationFrame(gameLoop);
+        }
+
+        createMissions();
+        createNPCs();
+        gameLoop();
+    </script>
 </body>
 </html>
