@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GTA IX - Prototype</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="1000" height="700"></canvas>
+        <div id="hud">
+            <div class="hud-section">
+                <h3>Player</h3>
+                <p>Health: <span id="health">100</span>/100</p>
+                <p>Money: $<span id="money">0</span></p>
+                <p>Level: <span id="level">1</span></p>
+            </div>
+            <div class="hud-section">
+                <h3>Mission</h3>
+                <p id="missionText">Find a mission to start</p>
+            </div>
+            <div class="hud-section">
+                <h3>Controls</h3>
+                <p>WASD/Arrows: Move</p>
+                <p>Space: Shoot</p>
+                <p>E: Interact</p>
+                <p>M: Mission Menu</p>
+            </div>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>

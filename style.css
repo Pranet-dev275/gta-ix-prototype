@@ -1,0 +1,98 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background: #1a1a1a;
+    color: #fff;
+    overflow: hidden;
+}
+
+#gameContainer {
+    display: flex;
+    gap: 20px;
+    padding: 20px;
+    background: #000;
+    height: 100vh;
+}
+
+#gameCanvas {
+    border: 3px solid #00ff00;
+    background: linear-gradient(135deg, #1a3a52 0%, #0d1f2d 100%);
+    cursor: crosshair;
+    flex: 1;
+    box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+}
+
+#hud {
+    width: 250px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    overflow-y: auto;
+}
+
+.hud-section {
+    background: rgba(0, 255, 0, 0.1);
+    border: 2px solid #00ff00;
+    padding: 15px;
+    border-radius: 5px;
+}
+
+.hud-section h3 {
+    color: #00ff00;
+    margin-bottom: 10px;
+    font-size: 14px;
+    text-transform: uppercase;
+}
+
+.hud-section p {
+    font-size: 12px;
+    margin: 5px 0;
+    color: #ccc;
+}
+
+#missionText {
+    color: #ffff00;
+    font-weight: bold;
+}
+
+/* Scrollbar styling */
+#hud::-webkit-scrollbar {
+    width: 8px;
+}
+
+#hud::-webkit-scrollbar-track {
+    background: rgba(0, 255, 0, 0.1);
+}
+
+#hud::-webkit-scrollbar-thumb {
+    background: #00ff00;
+    border-radius: 4px;
+}
+
+/* Responsive design */
+@media (max-width: 1200px) {
+    #gameContainer {
+        flex-direction: column;
+    }
+    
+    #gameCanvas {
+        width: 100%;
+        height: 500px;
+    }
+    
+    #hud {
+        width: 100%;
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+    
+    .hud-section {
+        flex: 1;
+        min-width: 200px;
+    }
+}
